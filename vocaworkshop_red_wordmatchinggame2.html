@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Word Match Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f8ff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    #game {
+      display: flex;
+      position: relative;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      margin: 0 20px;
+    }
+
+    .item {
+      padding: 10px 20px;
+      margin: 10px 0;
+      background: white;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      cursor: pointer;
+      width: 240px;
+      text-align: left;
+      transition: background 0.3s;
+      z-index: 2;
+      position: relative;
+      white-space: normal;
+      word-wrap: break-word;
+    }
+
+    .item img {
+      max-width: 100%;
+      height: 50px;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .item:hover {
+      background-color: #e0f7fa;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    .selected {
+      background-color: #c8e6c9 !important;
+    }
+
+    .correct {
+      background-color: #d0f0c0;
+    }
+
+    .circle-number {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #4caf50;
+      color: white;
+      text-align: center;
+      line-height: 24px;
+      margin-right: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🔗 단어 - 그림 - 뜻 연결 게임</h2>
+<div id="game">
+  <div class="column" id="words"></div>
+  <canvas id="lines" width="1200" height="800"></canvas>
+  <div class="column" id="images"></div>
+  <div class="column" id="definitions"></div>
+</div>
+
+<div>
+  <button id="checkBtn">정답 확인</button>
+  <button id="undoBtn">마지막 연결선 지우기</button>
+  <button id="reloadBtn">다시 시작</button>
+</div>
+
+<script>
+  const fullData = [
+    { word: "emperor", definition: "a king, ruler of an empire", image: "img/emperor.jpg" },
+    { word: "inch", definition: "A unit of length, 1/12 of a foot, equivalent to 2.54 centimeters", image: "img/inch.jpg" },
+    { word: "antarctica", definition: "A very cold continent around the South Pole, covered by an ice shelf", image: "img/antarctica.jpg" },
+    { word: "south pole", definition: "The southernmost point on Earth, where the Earth's axis of rotation intersects its surface.", image: "img/southpole.jpg" },
+    { word: "temperature", definition: "A measure of the quantity of heat in an object, usually as measured on a thermometer", image: "img/temperature.jpg" },
+    { word: "below", definition: "In or to a lower place; beneath", image: "img/below.jpg" },
+    { word: "fat", definition: "The extra flesh that animals and humans have under their skin, used to store energy and help keep them warm.", image: "img/fat.jpg" },
+    { word: "lay an egg", definition: "Informally means to fail completely, especially in a performance", image: "img/layanegg.jpg" },
+    { word: "whole", definition: "Comprising the full quantity, amount, extent, number", image: "img/whole.jpg" },
+    { word: "fierce", definition: "Very intense or enthusiastic; involving great activity", image: "img/fierce.jpg" },
+    { word: "huddle", definition: "To sit, stand, or lie close together, usually because of cold or fear", image: "img/huddle.jpg" },
+    { word: "howl", definition: "To utter a loud, prolonged, mournful cry, as that of a dog or wolf.", image: "img/howl.jpg" },
+    { word: "protect", definition: "To shield from injury, danger, or loss; guard; defend", image: "img/protect.jpg" },
+    { word: "hunt", definition: "To go out to kill or catch (game) for food or sport; to search eagerly or carefully for; try to find.", image: "img/hunt.jpg" },
+    { word: "freeze", definition: "To become hardened into ice due to cold", image: "img/freeze.jpg" }
+  ];
+
+  let shuffled = [];
+  let connections = [];
+  let selectedEl = null;
+  let selectedWord = null;
+  let selectedImage = null;
+  let selectedDef = null;
+
+  const wordsContainer = document.getElementById("words");
+  const imagesContainer = document.getElementById("images");
+  const defsContainer = document.getElementById("definitions");
+  const canvas = document.getElementById("lines");
+  const ctx = canvas.getContext("2d");
+  const checkBtn = document.getElementById("checkBtn");
+  const undoBtn = document.getElementById("undoBtn");
+  const reloadBtn = document.getElementById("reloadBtn");
+
+  function initializeGame() {
+    shuffled = fullData.sort(() => 0.5 - Math.random()).slice(0, 10);
+    connections = [];
+    selectedWord = null;
+    selectedImage = null;
+    selectedDef = null;
+
+    wordsContainer.innerHTML = "";
+    imagesContainer.innerHTML = "";
+    defsContainer.innerHTML = "";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const defs = [...shuffled].sort(() => 0.5 - Math.random());
+    const images = [...shuffled].sort(() => 0.5 - Math.random());
+
+    shuffled.forEach((item, i) => {
+      const wordEl = document.createElement("div");
+      wordEl.className = "item word";
+      wordEl.innerHTML = `<span class="circle-number">${i + 1}</span>${item.word}`;
+      wordEl.dataset.word = item.word;
+      wordsContainer.appendChild(wordEl);
+    });
+
+    images.forEach((item) => {
+      const imgEl = document.createElement("div");
+      imgEl.className = "item image";
+      imgEl.innerHTML = `<img src="${item.image}" alt="${item.word}" />`;
+      imgEl.dataset.word = item.word;
+      imagesContainer.appendChild(imgEl);
+    });
+
+    defs.forEach((item) => {
+      const defEl = document.createElement("div");
+      defEl.className = "item def";
+      defEl.textContent = item.definition;
+      defEl.dataset.word = item.word;
+      defsContainer.appendChild(defEl);
+    });
+  }
+
+  function drawConnection(wordEl, imageEl, defEl) {
+    drawLineBetweenElements(wordEl, imageEl);
+    drawLineBetweenElements(imageEl, defEl);
+    connections.push({ word: wordEl.dataset.word, image: imageEl.dataset.word, def: defEl.dataset.word });
+  }
+
+  function clearSelection() {
+    [selectedWord, selectedImage, selectedDef].forEach(el => {
+      if (el) el.classList.remove("selected");
+    });
+    selectedWord = selectedImage = selectedDef = null;
+  }
+
+  function handleClick(el, type) {
+    if (el.classList.contains("selected")) {
+      el.classList.remove("selected");
+      if (type === 'word') selectedWord = null;
+      if (type === 'image') selectedImage = null;
+      if (type === 'def') selectedDef = null;
+    } else {
+      el.classList.add("selected");
+      if (type === 'word') selectedWord = el;
+      if (type === 'image') selectedImage = el;
+      if (type === 'def') selectedDef = el;
+    }
+
+    if (selectedWord && selectedImage && selectedDef) {
+      drawConnection(selectedWord, selectedImage, selectedDef);
+      clearSelection();
+    }
+  }
+
+  [wordsContainer, imagesContainer, defsContainer].forEach(container => {
+    container.addEventListener("click", (e) => {
+      const el = e.target.closest(".item");
+      if (!el) return;
+      if (container === wordsContainer) handleClick(el, 'word');
+      if (container === imagesContainer) handleClick(el, 'image');
+      if (container === defsContainer) handleClick(el, 'def');
+    });
+  });
+
+  function drawLineBetweenElements(fromEl, toEl) {
+    const fromRect = fromEl.getBoundingClientRect();
+    const toRect = toEl.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+
+    const startX = fromRect.right - canvasRect.left;
+    const startY = fromRect.top + fromRect.height / 2 - canvasRect.top;
+    const endX = toRect.left - canvasRect.left;
+    const endY = toRect.top + toRect.height / 2 - canvasRect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  checkBtn.addEventListener("click", () => {
+    let correct = 0;
+    connections.forEach(({ word, image, def }) => {
+      if (word === image && word === def) correct++;
+    });
+    const percent = Math.round((correct / shuffled.length) * 100);
+    let message = "";
+    if (percent === 100) message = "최고야!";
+    else if (percent >= 70) message = "잘했어요!";
+    else message = "조금 더 노력해봐";
+    alert(`정답률: ${percent}%\n${message}`);
+  });
+
+  undoBtn.addEventListener("click", () => {
+    connections.pop();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    connections.forEach(({ word, image, def }) => {
+      const wordEl = document.querySelector(`[data-word='${word}']`);
+      const imageEl = document.querySelector(`[data-word='${image}']`);
+      const defEl = document.querySelector(`[data-word='${def}']`);
+      drawConnection(wordEl, imageEl, defEl);
+    });
+  });
+
+  reloadBtn.addEventListener("click", () => {
+    if (confirm("정말 다시 시작할까요?")) {
+      initializeGame();
+    }
+  });
+
+  initializeGame();
+</script>
+
+</body>
+</html>
